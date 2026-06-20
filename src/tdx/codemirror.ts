@@ -3,13 +3,15 @@ import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirro
 import { bracketMatching, foldGutter, indentOnInput } from '@codemirror/language'
 import { linter, lintGutter, lintKeymap, type Diagnostic } from '@codemirror/lint'
 import { searchKeymap } from '@codemirror/search'
-import { EditorState, RangeSetBuilder, type Extension } from '@codemirror/state'
+import { EditorState, RangeSetBuilder, type Extension, type RangeSet } from '@codemirror/state'
 import {
   Decoration,
   EditorView,
+  GutterMarker,
   ViewPlugin,
   drawSelection,
   dropCursor,
+  gutter,
   highlightActiveLine,
   highlightActiveLineGutter,
   hoverTooltip,
@@ -82,7 +84,6 @@ function parseState(state: EditorState): ParsedDocument {
 
 function buildDecorations(doc: string): DecorationSet {
   const parsed = parseTdx(doc)
-  const colorsByOffset = new Map(collectColors(parsed).map((color) => [color.range.start.offset, color.css]))
   const builder = new RangeSetBuilder<Decoration>()
 
   for (const token of parsed.tokens) {
@@ -90,17 +91,11 @@ function buildDecorations(doc: string): DecorationSet {
     const to = token.offset + token.length
     if (from === to) continue
 
-    const classes = ['tdx-token', tokenClassByKind[token.kind]]
-    if (colorsByOffset.has(token.offset)) classes.push('tdx-token-has-color')
-
     builder.add(
       from,
       to,
       Decoration.mark({
-        class: classes.join(' '),
-        attributes: colorsByOffset.has(token.offset)
-          ? { style: `--tdx-token-color:${colorsByOffset.get(token.offset)}` }
-          : undefined,
+        class: ['tdx-token', tokenClassByKind[token.kind]].join(' '),
       }),
     )
   }
@@ -126,6 +121,62 @@ const tdxHighlightPlugin = ViewPlugin.fromClass(
     decorations: (plugin) => plugin.decorations,
   },
 )
+
+class ColorGutterMarker extends GutterMarker {
+  readonly colors: readonly string[]
+
+  constructor(colors: readonly string[]) {
+    super()
+    this.colors = colors
+  }
+
+  eq(other: GutterMarker): boolean {
+    return other instanceof ColorGutterMarker && this.colors.join('|') === other.colors.join('|')
+  }
+
+  toDOM(): Node {
+    const wrapper = document.createElement('span')
+    wrapper.className = 'tdx-color-gutter-stack'
+    wrapper.title = this.colors.join(' / ')
+
+    for (const color of this.colors.slice(0, 3)) {
+      const swatch = document.createElement('span')
+      swatch.className = 'tdx-color-gutter-swatch'
+      swatch.style.backgroundColor = color
+      wrapper.appendChild(swatch)
+    }
+
+    return wrapper
+  }
+}
+
+function buildColorMarkers(state: EditorState): RangeSet<GutterMarker> {
+  const source = documentText(state)
+  const parsed = parseTdx(source)
+  const colorsByLine = new Map<number, string[]>()
+
+  for (const color of collectColors(parsed)) {
+    const line = state.doc.lineAt(color.range.start.offset)
+    const colors = colorsByLine.get(line.from) || []
+    if (!colors.includes(color.css)) colors.push(color.css)
+    colorsByLine.set(line.from, colors)
+  }
+
+  const builder = new RangeSetBuilder<GutterMarker>()
+  for (const [lineStart, colors] of [...colorsByLine.entries()].sort((a, b) => a[0] - b[0])) {
+    builder.add(lineStart, lineStart, new ColorGutterMarker(colors))
+  }
+
+  return builder.finish()
+}
+
+const colorGutter = gutter({
+  class: 'tdx-color-gutter',
+  renderEmptyElements: true,
+  initialSpacer: () => new ColorGutterMarker(['transparent']),
+  markers: (view) => buildColorMarkers(view.state),
+  lineMarkerChange: (update) => update.docChanged,
+})
 
 function toDiagnosticSeverity(severity: ReturnType<typeof lintTdx>[number]['severity']): Diagnostic['severity'] {
   if (severity === 'error') return 'error'
@@ -265,7 +316,7 @@ const tdxEditorTheme = EditorView.theme({
     caretColor: 'var(--accent)',
   },
   '.cm-line': {
-    padding: '0 28px',
+    padding: '0 14px',
   },
   '.cm-gutters': {
     backgroundColor: 'var(--editor-gutter-bg)',
@@ -314,6 +365,27 @@ const tdxEditorTheme = EditorView.theme({
   '.cm-diagnostic': {
     whiteSpace: 'pre-line',
   },
+  '.tdx-color-gutter': {
+    minWidth: '24px',
+  },
+  '.tdx-color-gutter .cm-gutterElement': {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '0 4px',
+  },
+  '.tdx-color-gutter-stack': {
+    display: 'inline-flex',
+    flexDirection: 'column',
+    gap: '2px',
+  },
+  '.tdx-color-gutter-swatch': {
+    width: '13px',
+    height: '13px',
+    border: '1px solid var(--color-swatch-border)',
+    borderRadius: '3px',
+    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.28)',
+  },
   '.tdx-token-comment': { color: 'var(--syntax-comment)', fontStyle: 'italic' },
   '.tdx-token-string': { color: 'var(--syntax-string)' },
   '.tdx-token-market-reference': { color: 'var(--syntax-market)' },
@@ -335,12 +407,10 @@ const tdxEditorTheme = EditorView.theme({
     color: 'var(--syntax-error)',
     textDecoration: 'underline wavy currentColor',
   },
-  '.tdx-token-has-color': {
-    borderBottom: '2px solid var(--tdx-token-color)',
-  },
 })
 
 export const tdxEditorExtensions: Extension[] = [
+  colorGutter,
   lineNumbers(),
   foldGutter(),
   lintGutter(),

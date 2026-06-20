@@ -20,6 +20,7 @@ import { useTdxFile } from './hooks/useTdxFile'
 import { initialTdx } from './tdx/sample'
 
 type Theme = 'dark' | 'light'
+const THEME_OVERRIDE_STORAGE_KEY = 'tdx-editor-theme-override'
 
 type ToolbarButtonProps = {
   label: string
@@ -64,12 +65,19 @@ function diagnosticSummary(diagnostics: TdxDiagnostic[]) {
   return { errors, warnings, infos }
 }
 
+function systemTheme(): Theme {
+  if (typeof window === 'undefined') return 'light'
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+}
+
 function App() {
   const [content, setContent] = useState(() => readAutoSave(initialTdx))
-  const [theme, setTheme] = useState<Theme>(() => {
-    if (typeof localStorage === 'undefined') return 'dark'
-    return (localStorage.getItem('tdx-editor-theme') as Theme | null) || 'dark'
+  const [themeOverride, setThemeOverride] = useState<Theme | null>(() => {
+    if (typeof localStorage === 'undefined') return null
+    const stored = localStorage.getItem(THEME_OVERRIDE_STORAGE_KEY)
+    return stored === 'dark' || stored === 'light' ? stored : null
   })
+  const [systemThemeValue, setSystemThemeValue] = useState<Theme>(() => systemTheme())
   const [problemsOpen, setProblemsOpen] = useState(true)
   const [statusMessage, setStatusMessage] = useState('就绪')
   const editorRef = useRef<TdxCodeEditorHandle>(null)
@@ -81,11 +89,27 @@ function App() {
   const diagnostics = useMemo(() => lintTdx(content), [content])
   const summary = useMemo(() => diagnosticSummary(diagnostics), [diagnostics])
   const lines = useMemo(() => content.split('\n').length, [content])
+  const theme = themeOverride || systemThemeValue
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
-    localStorage.setItem('tdx-editor-theme', theme)
   }, [theme])
+
+  useEffect(() => {
+    if (themeOverride) {
+      localStorage.setItem(THEME_OVERRIDE_STORAGE_KEY, themeOverride)
+    } else {
+      localStorage.removeItem(THEME_OVERRIDE_STORAGE_KEY)
+    }
+  }, [themeOverride])
+
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-color-scheme: dark)')
+    const updateSystemTheme = () => setSystemThemeValue(media.matches ? 'dark' : 'light')
+    updateSystemTheme()
+    media.addEventListener('change', updateSystemTheme)
+    return () => media.removeEventListener('change', updateSystemTheme)
+  }, [])
 
   const runAction = useCallback(async (action: () => Promise<void>, message: string) => {
     try {
@@ -174,7 +198,7 @@ function App() {
             type="button"
             className="icon-button"
             title="切换主题"
-            onClick={() => setTheme((current) => (current === 'dark' ? 'light' : 'dark'))}
+            onClick={() => setThemeOverride(theme === 'dark' ? 'light' : 'dark')}
           >
             {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
           </button>

@@ -32,6 +32,7 @@
   --text-muted: #74706a;
   --border: #30323b;
   --border-subtle: #282a32;
+  --color-swatch-border: rgba(255, 255, 255, 0.42);
   --shadow-lg: 0 14px 40px rgba(0, 0, 0, 0.34);
   --shadow-glow: 0 0 22px rgba(217, 164, 65, 0.22);
 
@@ -69,6 +70,7 @@
   --text-muted: #8a95a3;
   --border: #d8dee8;
   --border-subtle: #e8edf4;
+  --color-swatch-border: rgba(15, 23, 42, 0.45);
   --shadow-lg: 0 14px 40px rgba(15, 23, 42, 0.14);
   --shadow-glow: 0 0 20px rgba(217, 164, 65, 0.18);
 
