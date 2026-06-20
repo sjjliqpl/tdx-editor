@@ -1,0 +1,122 @@
+:root {
+  --accent: #d9a441;
+  --accent-subtle: rgba(217, 164, 65, 0.16);
+  --danger: #ef4444;
+  --warning: #f59e0b;
+  --info: #38bdf8;
+  --success: #22c55e;
+
+  --font-ui: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+
+  font-family: var(--font-ui);
+  color-scheme: dark;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+:root,
+[data-theme='dark'] {
+  --bg-primary: #17181d;
+  --bg-secondary: #202127;
+  --bg-elevated: #292b33;
+  --button-bg: #181a20;
+  --editor-bg: #14151a;
+  --editor-gutter-bg: #191b21;
+  --editor-active-line: rgba(255, 255, 255, 0.045);
+  --selection: rgba(217, 164, 65, 0.28);
+  --text-primary: #ece7dc;
+  --text-secondary: #b4afa5;
+  --text-muted: #74706a;
+  --border: #30323b;
+  --border-subtle: #282a32;
+  --shadow-lg: 0 14px 40px rgba(0, 0, 0, 0.34);
+  --shadow-glow: 0 0 22px rgba(217, 164, 65, 0.22);
+
+  --syntax-comment: #738091;
+  --syntax-string: #42b883;
+  --syntax-market: #39b8a5;
+  --syntax-period: #a78bfa;
+  --syntax-number: #d9a441;
+  --syntax-variable: #b8d3ff;
+  --syntax-output: #ff6b8a;
+  --syntax-assignment: #67b7ff;
+  --syntax-field: #60a5fa;
+  --syntax-function: #c084fc;
+  --syntax-draw-function: #fb923c;
+  --syntax-finance-function: #e879f9;
+  --syntax-level2-function: #f472b6;
+  --syntax-keyword: #fb7185;
+  --syntax-operator: #9ca3af;
+  --syntax-property: #2dd4bf;
+  --syntax-color: #fbbf24;
+  --syntax-error: #f87171;
+}
+
+[data-theme='light'] {
+  --bg-primary: #f4f6f8;
+  --bg-secondary: #ffffff;
+  --bg-elevated: #ffffff;
+  --button-bg: #f8fafc;
+  --editor-bg: #ffffff;
+  --editor-gutter-bg: #f3f6fa;
+  --editor-active-line: rgba(15, 23, 42, 0.055);
+  --selection: rgba(217, 164, 65, 0.25);
+  --text-primary: #1d2633;
+  --text-secondary: #53606f;
+  --text-muted: #8a95a3;
+  --border: #d8dee8;
+  --border-subtle: #e8edf4;
+  --shadow-lg: 0 14px 40px rgba(15, 23, 42, 0.14);
+  --shadow-glow: 0 0 20px rgba(217, 164, 65, 0.18);
+
+  --syntax-comment: #64748b;
+  --syntax-string: #047857;
+  --syntax-market: #0f766e;
+  --syntax-period: #6d28d9;
+  --syntax-number: #a16207;
+  --syntax-variable: #0f4c81;
+  --syntax-output: #be123c;
+  --syntax-assignment: #0369a1;
+  --syntax-field: #2563eb;
+  --syntax-function: #7c3aed;
+  --syntax-draw-function: #c2410c;
+  --syntax-finance-function: #9333ea;
+  --syntax-level2-function: #be185d;
+  --syntax-keyword: #b91c1c;
+  --syntax-operator: #475569;
+  --syntax-property: #0f766e;
+  --syntax-color: #b45309;
+  --syntax-error: #dc2626;
+
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  min-height: 100vh;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+button {
+  font: inherit;
+}
+
+::selection {
+  background: var(--selection);
+}
