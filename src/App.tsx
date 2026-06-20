@@ -3,7 +3,6 @@ import {
   AlertCircle,
   CheckCircle2,
   Download,
-  FileCode2,
   FilePlus2,
   FolderOpen,
   ListChecks,
@@ -156,9 +155,7 @@ function App() {
     <div className="app-shell">
       <header className="topbar">
         <div className="brand">
-          <span className="brand-mark">
-            <FileCode2 size={17} />
-          </span>
+          <span className="brand-mark">TDX</span>
           <div>
             <strong>TDX Editor</strong>
             <span>{file.fileName}</span>

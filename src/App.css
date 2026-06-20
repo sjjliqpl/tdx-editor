@@ -19,20 +19,22 @@
 .brand {
   display: flex;
   align-items: center;
-  min-width: 220px;
-  gap: 10px;
+  min-width: 210px;
+  gap: 9px;
 }
 
 .brand-mark {
   display: inline-flex;
-  width: 30px;
-  height: 30px;
+  width: 34px;
+  height: 26px;
   align-items: center;
   justify-content: center;
   color: #fff;
   background: linear-gradient(135deg, var(--accent), #0f766e);
-  border-radius: 8px;
+  border-radius: 6px;
   box-shadow: var(--shadow-glow);
+  font: 700 11px/1 var(--font-ui);
+  letter-spacing: 0;
 }
 
 .brand strong,
