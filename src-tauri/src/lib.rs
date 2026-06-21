@@ -501,6 +501,11 @@ fn create_menu(app: &AppHandle) -> tauri::Result<()> {
 
   let view = SubmenuBuilder::new(app, "View")
     .item(
+      &MenuItemBuilder::with_id("toggleLineWrap", "Toggle Line Wrap")
+        .accelerator("Alt+Z")
+        .build(app)?,
+    )
+    .item(
       &MenuItemBuilder::with_id("toggleTheme", "Toggle Theme")
         .accelerator("CmdOrCtrl+Shift+T")
         .build(app)?,
@@ -784,7 +789,7 @@ pub fn run() {
         "new" => {
           let _ = create_document_window(app, None, None);
         }
-        "open" | "save" | "saveAs" | "close" | "toggleTheme" | "loadSample" => {
+        "open" | "save" | "saveAs" | "close" | "toggleLineWrap" | "toggleTheme" | "loadSample" => {
           emit_menu_command(app, id);
         }
         "recent_clear" => {

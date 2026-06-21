@@ -168,6 +168,12 @@
   border-color: var(--accent);
 }
 
+.icon-button[aria-pressed='true'] {
+  color: var(--text-primary);
+  background: var(--accent-subtle);
+  border-color: var(--accent);
+}
+
 .workspace {
   grid-area: workspace;
   min-height: 0;

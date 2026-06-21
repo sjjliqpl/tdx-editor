@@ -9,6 +9,7 @@ import {
   Play,
   Save,
   Sun,
+  WrapText,
 } from 'lucide-react'
 import { lintTdx, parseTdx, type TdxDiagnostic } from '@tdx/language'
 import './App.css'
@@ -21,6 +22,7 @@ import type { DesktopCommand, DesktopOpenPathPayload } from './types/editor'
 
 type Theme = 'dark' | 'light'
 const THEME_OVERRIDE_STORAGE_KEY = 'tdx-editor-theme-override'
+const LINE_WRAP_STORAGE_KEY = 'tdx-editor-line-wrap'
 const RECENT_FILES_STORAGE_KEY = 'tdx-editor-recent-files'
 const ACTIVE_WINDOW_STORAGE_KEY = 'tdx-editor-active-window-label'
 
@@ -85,6 +87,10 @@ function App() {
     const stored = localStorage.getItem(THEME_OVERRIDE_STORAGE_KEY)
     return stored === 'dark' || stored === 'light' ? stored : null
   })
+  const [lineWrapping, setLineWrapping] = useState(() => {
+    if (typeof localStorage === 'undefined') return true
+    return localStorage.getItem(LINE_WRAP_STORAGE_KEY) !== 'off'
+  })
   const [systemThemeValue, setSystemThemeValue] = useState<Theme>(() => systemTheme())
   const [fileMenuOpen, setFileMenuOpen] = useState(false)
   const editorRef = useRef<TdxCodeEditorHandle>(null)
@@ -122,6 +128,10 @@ function App() {
       localStorage.removeItem(THEME_OVERRIDE_STORAGE_KEY)
     }
   }, [themeOverride])
+
+  useEffect(() => {
+    localStorage.setItem(LINE_WRAP_STORAGE_KEY, lineWrapping ? 'on' : 'off')
+  }, [lineWrapping])
 
   useEffect(() => {
     const media = window.matchMedia('(prefers-color-scheme: dark)')
@@ -261,6 +271,9 @@ function App() {
           break
         case 'close':
           void closeWindow()
+          break
+        case 'toggleLineWrap':
+          setLineWrapping((current) => !current)
           break
         case 'toggleTheme':
           setThemeOverride((current) => {
@@ -487,6 +500,16 @@ function App() {
           <button
             type="button"
             className="icon-button"
+            aria-label={lineWrapping ? '关闭自动换行' : '开启自动换行'}
+            aria-pressed={lineWrapping}
+            title={lineWrapping ? '关闭自动换行' : '开启自动换行'}
+            onClick={() => setLineWrapping((current) => !current)}
+          >
+            <WrapText size={16} />
+          </button>
+          <button
+            type="button"
+            className="icon-button"
             title="切换主题"
             onClick={() => setThemeOverride(theme === 'dark' ? 'light' : 'dark')}
           >
@@ -496,7 +519,7 @@ function App() {
       </header>
 
       <main className="workspace">
-        <TdxCodeEditor ref={editorRef} value={doc.content} onChange={setContent} />
+        <TdxCodeEditor ref={editorRef} value={doc.content} onChange={setContent} lineWrapping={lineWrapping} />
       </main>
 
       <aside className="problems-panel" aria-label="问题列表">

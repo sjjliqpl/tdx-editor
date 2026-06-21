@@ -368,5 +368,4 @@ export const tdxEditorExtensions: Extension[] = [
   ]),
   tdxEditorTheme,
   EditorState.tabSize.of(2),
-  EditorView.lineWrapping,
 ]

@@ -1,11 +1,12 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
-import { EditorState } from '@codemirror/state'
+import { Compartment, EditorState } from '@codemirror/state'
 import { EditorView } from '@codemirror/view'
 import { tdxEditorExtensions } from '../tdx/codemirror'
 
 type TdxCodeEditorProps = {
   value: string
   onChange: (value: string) => void
+  lineWrapping: boolean
 }
 
 export type TdxCodeEditorHandle = {
@@ -13,11 +14,13 @@ export type TdxCodeEditorHandle = {
 }
 
 export const TdxCodeEditor = forwardRef<TdxCodeEditorHandle, TdxCodeEditorProps>(function TdxCodeEditor(
-  { value, onChange },
+  { value, onChange, lineWrapping },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const viewRef = useRef<EditorView | null>(null)
+  const lineWrappingCompartmentRef = useRef(new Compartment())
+  const initialLineWrappingRef = useRef(lineWrapping)
   const valueRef = useRef(value)
   const onChangeRef = useRef(onChange)
 
@@ -35,6 +38,7 @@ export const TdxCodeEditor = forwardRef<TdxCodeEditorHandle, TdxCodeEditorProps>
         doc: valueRef.current,
         extensions: [
           ...tdxEditorExtensions,
+          lineWrappingCompartmentRef.current.of(initialLineWrappingRef.current ? EditorView.lineWrapping : []),
           EditorView.updateListener.of((update) => {
             if (!update.docChanged) return
             const next = update.state.doc.toString()
@@ -52,6 +56,14 @@ export const TdxCodeEditor = forwardRef<TdxCodeEditorHandle, TdxCodeEditorProps>
       viewRef.current = null
     }
   }, [])
+
+  useEffect(() => {
+    const view = viewRef.current
+    if (!view) return
+    view.dispatch({
+      effects: lineWrappingCompartmentRef.current.reconfigure(lineWrapping ? EditorView.lineWrapping : []),
+    })
+  }, [lineWrapping])
 
   useEffect(() => {
     const view = viewRef.current
