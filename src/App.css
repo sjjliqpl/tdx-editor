@@ -18,8 +18,9 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 0 16px;
+  gap: 14px;
+  min-height: 52px;
+  padding: 0 14px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
 }
@@ -27,22 +28,17 @@
 .brand {
   display: flex;
   align-items: center;
-  min-width: 210px;
+  flex: 0 1 auto;
+  min-width: 0;
   gap: 9px;
 }
 
 .brand-mark {
-  display: inline-flex;
-  width: 34px;
-  height: 26px;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  background: linear-gradient(135deg, var(--accent), #0f766e);
-  border-radius: 6px;
-  box-shadow: var(--shadow-glow);
-  font: 700 11px/1 var(--font-ui);
-  letter-spacing: 0;
+  display: block;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  filter: drop-shadow(0 4px 10px rgba(15, 44, 52, 0.22));
 }
 
 .brand strong,
@@ -64,14 +60,24 @@
   white-space: nowrap;
 }
 
-.toolbar,
+.menubar,
 .topbar-actions {
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
-.tool-button,
+.menubar {
+  flex: 1 1 auto;
+  justify-content: flex-start;
+  min-width: 0;
+}
+
+.menu-root {
+  position: relative;
+}
+
+.menu-trigger,
 .icon-button {
   display: inline-flex;
   align-items: center;
@@ -86,8 +92,69 @@
   font: 12px/1 var(--font-ui);
 }
 
-.tool-button {
+.menu-trigger {
+  min-width: 66px;
+  height: 28px;
   padding: 0 10px;
+  color: var(--text-primary);
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.menu-trigger[aria-expanded='true'] {
+  background: var(--accent-subtle);
+  border-color: var(--accent);
+}
+
+.file-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 10;
+  width: 230px;
+  padding: 6px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow-lg);
+}
+
+.file-menu button {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) 54px;
+  align-items: center;
+  width: 100%;
+  min-height: 34px;
+  gap: 9px;
+  padding: 0 8px;
+  color: var(--text-secondary);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  font: 12px/1 var(--font-ui);
+}
+
+.file-menu button:hover,
+.file-menu button:focus-visible {
+  color: var(--text-primary);
+  background: var(--accent-subtle);
+  outline: none;
+}
+
+.file-menu kbd {
+  color: var(--text-muted);
+  font: 10px/1 var(--font-mono);
+  text-align: right;
+}
+
+.file-menu hr {
+  height: 1px;
+  margin: 5px 4px;
+  background: var(--border-subtle);
+  border: 0;
 }
 
 .icon-button {
@@ -95,7 +162,7 @@
   padding: 0 8px;
 }
 
-.tool-button:hover,
+.menu-trigger:hover,
 .icon-button:hover {
   color: var(--text-primary);
   border-color: var(--accent);
@@ -135,7 +202,6 @@
   border-bottom: 1px solid var(--border);
 }
 
-.panel-header strong,
 .panel-header span {
   margin-right: 10px;
 }
@@ -145,12 +211,25 @@
   font-size: 12px;
 }
 
-.panel-header button {
+.panel-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-left: auto;
   color: var(--text-muted);
   background: transparent;
   border: 0;
+  border-radius: 6px;
   cursor: pointer;
-  font: 12px/1 var(--font-ui);
+}
+
+.panel-close:hover,
+.panel-close:focus-visible {
+  color: var(--text-primary);
+  background: var(--button-bg);
+  outline: none;
 }
 
 .problem-list {
@@ -214,19 +293,6 @@
 
 .problem-info svg {
   color: var(--info);
-}
-
-.empty-problems {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 18px 16px;
-  color: var(--text-muted);
-  font-size: 13px;
-}
-
-.empty-problems svg {
-  color: var(--success);
 }
 
 .statusbar {
@@ -303,13 +369,14 @@
     flex: 1 1 100%;
   }
 
-  .toolbar {
+  .menubar {
     flex: 1 1 auto;
-    overflow-x: auto;
+    justify-content: flex-start;
   }
 
-  .tool-button {
-    flex: 0 0 auto;
+  .file-menu {
+    left: 0;
+    transform: none;
   }
 
   .statusbar {

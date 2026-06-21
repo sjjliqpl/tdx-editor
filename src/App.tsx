@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertCircle,
-  CheckCircle2,
   Download,
   FilePlus2,
   FolderOpen,
   ListChecks,
+  Menu,
   Moon,
   Play,
   Save,
   Sun,
+  X,
 } from 'lucide-react'
 import { lintTdx, parseTdx, type TdxDiagnostic } from '@tdx/language'
 import './App.css'
@@ -24,22 +25,6 @@ type Theme = 'dark' | 'light'
 const THEME_OVERRIDE_STORAGE_KEY = 'tdx-editor-theme-override'
 const RECENT_FILES_STORAGE_KEY = 'tdx-editor-recent-files'
 const ACTIVE_WINDOW_STORAGE_KEY = 'tdx-editor-active-window-label'
-
-type ToolbarButtonProps = {
-  label: string
-  title?: string
-  onClick: () => void
-  children: React.ReactNode
-}
-
-function ToolbarButton({ label, title, onClick, children }: ToolbarButtonProps) {
-  return (
-    <button type="button" className="tool-button" onClick={onClick} title={title || label}>
-      {children}
-      <span>{label}</span>
-    </button>
-  )
-}
 
 function formatTime(date: Date | null) {
   if (!date) return '等待自动保存'
@@ -73,6 +58,11 @@ function systemTheme(): Theme {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
 }
 
+function isApplePlatform() {
+  if (typeof navigator === 'undefined') return false
+  return /Mac|iPhone|iPad|iPod/.test(navigator.platform)
+}
+
 function persistRecentFile(filePath?: string) {
   if (!filePath || typeof localStorage === 'undefined') return
   const stored = localStorage.getItem(RECENT_FILES_STORAGE_KEY)
@@ -98,7 +88,8 @@ function App() {
     return stored === 'dark' || stored === 'light' ? stored : null
   })
   const [systemThemeValue, setSystemThemeValue] = useState<Theme>(() => systemTheme())
-  const [problemsOpen, setProblemsOpen] = useState(true)
+  const [problemsOpen, setProblemsOpen] = useState(false)
+  const [fileMenuOpen, setFileMenuOpen] = useState(false)
   const editorRef = useRef<TdxCodeEditorHandle>(null)
   const docRef = useRef(doc)
   const allowCloseRef = useRef(false)
@@ -108,6 +99,15 @@ function App() {
   const summary = useMemo(() => diagnosticSummary(diagnostics), [diagnostics])
   const lines = useMemo(() => doc.content.split('\n').length, [doc.content])
   const theme = themeOverride || systemThemeValue
+  const shortcut = useMemo(() => {
+    const mod = isApplePlatform() ? '⌘' : 'Ctrl'
+    return {
+      new: `${mod}N`,
+      open: `${mod}O`,
+      save: `${mod}S`,
+      saveAs: isApplePlatform() ? `⇧${mod}S` : `${mod} Shift S`,
+    }
+  }, [])
 
   useEffect(() => {
     docRef.current = doc
@@ -357,6 +357,22 @@ function App() {
   }, [doc, openPathInCurrentWindow, runAction, runDesktopCommand])
 
   useEffect(() => {
+    if (filePlatform.isDesktop || !fileMenuOpen) return
+
+    const closeMenu = () => setFileMenuOpen(false)
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closeMenu()
+    }
+
+    window.addEventListener('click', closeMenu)
+    window.addEventListener('keydown', closeOnEscape)
+    return () => {
+      window.removeEventListener('click', closeMenu)
+      window.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [fileMenuOpen])
+
+  useEffect(() => {
     if (!filePlatform.isDesktop || !loaded) return
 
     void setDesktopWindowDirty(doc.dirty)
@@ -382,7 +398,7 @@ function App() {
     <div className="app-shell">
       <header className="topbar">
         <div className="brand">
-          <span className="brand-mark">TDX</span>
+          <img className="brand-mark" src={`${import.meta.env.BASE_URL}tdx-logo.png`} alt="TDX Editor" />
           <div>
             <strong>TDX Editor</strong>
             <span title={doc.filePath || doc.fileName}>
@@ -393,23 +409,84 @@ function App() {
         </div>
 
         {!filePlatform.isDesktop && (
-          <nav className="toolbar" aria-label="文件操作">
-            <ToolbarButton label="新建" title="新建 TDX 文件" onClick={createNewFile}>
-              <FilePlus2 size={15} />
-            </ToolbarButton>
-            <ToolbarButton label="打开" title="打开 .tdx 文件" onClick={() => void runAction(openFiles, '已打开文件')}>
-              <FolderOpen size={15} />
-            </ToolbarButton>
-            <ToolbarButton label="保存" title="保存 Cmd/Ctrl+S" onClick={() => void runAction(save, '已保存文件')}>
-              <Save size={15} />
-            </ToolbarButton>
-            <ToolbarButton label="另存" title="另存为 Cmd/Ctrl+Shift+S" onClick={() => void runAction(saveAs, '已另存文件')}>
-              <Download size={15} />
-            </ToolbarButton>
-            <ToolbarButton label="示例" title="载入示例公式" onClick={loadSample}>
-              <Play size={15} />
-            </ToolbarButton>
-          </nav>
+          <div className="menubar" aria-label="应用菜单" onClick={(event) => event.stopPropagation()}>
+            <div className="menu-root">
+              <button
+                type="button"
+                className="menu-trigger"
+                aria-haspopup="menu"
+                aria-expanded={fileMenuOpen}
+                onClick={() => setFileMenuOpen((open) => !open)}
+              >
+                <Menu size={15} />
+                <span>文件</span>
+              </button>
+              {fileMenuOpen && (
+                <div className="file-menu" role="menu" aria-label="文件菜单">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setFileMenuOpen(false)
+                      createNewFile()
+                    }}
+                  >
+                    <FilePlus2 size={15} />
+                    <span>新建</span>
+                    <kbd>{shortcut.new}</kbd>
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setFileMenuOpen(false)
+                      void runAction(openFiles, '已打开文件')
+                    }}
+                  >
+                    <FolderOpen size={15} />
+                    <span>打开...</span>
+                    <kbd>{shortcut.open}</kbd>
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setFileMenuOpen(false)
+                      void runAction(save, '已保存文件')
+                    }}
+                  >
+                    <Save size={15} />
+                    <span>保存</span>
+                    <kbd>{shortcut.save}</kbd>
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setFileMenuOpen(false)
+                      void runAction(saveAs, '已另存文件')
+                    }}
+                  >
+                    <Download size={15} />
+                    <span>另存为...</span>
+                    <kbd>{shortcut.saveAs}</kbd>
+                  </button>
+                  <hr />
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setFileMenuOpen(false)
+                      loadSample()
+                    }}
+                  >
+                    <Play size={15} />
+                    <span>载入示例</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         )}
 
         <div className="topbar-actions">
@@ -441,17 +518,20 @@ function App() {
       {problemsOpen && (
         <aside className="problems-panel" aria-label="问题列表">
           <div className="panel-header">
-            <div>
-              <strong>问题</strong>
-              <span>
-                {summary.errors} 错误 · {summary.warnings} 警告 · {summary.infos} 提示
-              </span>
-            </div>
-            <button type="button" onClick={() => setProblemsOpen(false)}>
-              关闭
+            <span>
+              {summary.errors} 错误 · {summary.warnings} 警告 · {summary.infos} 提示
+            </span>
+            <button
+              type="button"
+              className="panel-close"
+              aria-label="关闭问题面板"
+              title="关闭问题面板"
+              onClick={() => setProblemsOpen(false)}
+            >
+              <X size={15} />
             </button>
           </div>
-          {diagnostics.length ? (
+          {diagnostics.length > 0 && (
             <ul className="problem-list">
               {diagnostics.map((item, index) => {
                 const position = lineColumn(doc.content, item.range.start.offset)
@@ -475,11 +555,6 @@ function App() {
                 )
               })}
             </ul>
-          ) : (
-            <div className="empty-problems">
-              <CheckCircle2 size={17} />
-              当前公式没有发现问题
-            </div>
           )}
         </aside>
       )}
