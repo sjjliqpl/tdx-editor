@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "TDX Editor",
+  "version": "0.0.0",
+  "identifier": "com.tdx.editor",
+  "build": {
+    "beforeDevCommand": "npm run dev -- --host 127.0.0.1",
+    "devUrl": "http://127.0.0.1:5173/tdx-editor/",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "label": "main",
+        "title": "TDX Editor",
+        "width": 1100,
+        "height": 760,
+        "minWidth": 760,
+        "minHeight": 520,
+        "resizable": true,
+        "visible": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "category": "DeveloperTool",
+    "shortDescription": "TDX formula editor",
+    "longDescription": "TDX Editor is a desktop editor for Tongdaxin .tdx formula files.",
+    "fileAssociations": [
+      {
+        "ext": ["tdx"],
+        "name": "TDX Formula",
+        "description": "Tongdaxin formula file",
+        "mimeType": "text/plain",
+        "role": "Editor"
+      }
+    ]
+  }
+}

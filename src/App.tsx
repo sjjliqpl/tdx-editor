@@ -14,12 +14,16 @@ import {
 import { lintTdx, parseTdx, type TdxDiagnostic } from '@tdx/language'
 import './App.css'
 import { TdxCodeEditor, type TdxCodeEditorHandle } from './components/TdxCodeEditor'
-import { readAutoSave, useAutoSave } from './hooks/useAutoSave'
-import { useTdxFile } from './hooks/useTdxFile'
+import { useEditorDocument } from './hooks/useEditorDocument'
+import { filePlatform } from './platform'
+import { getAssignedDesktopDocument, setDesktopWindowDirty } from './platform/tauriFilePlatform'
 import { initialTdx } from './tdx/sample'
+import type { DesktopCommand, DesktopOpenPathPayload } from './types/editor'
 
 type Theme = 'dark' | 'light'
 const THEME_OVERRIDE_STORAGE_KEY = 'tdx-editor-theme-override'
+const RECENT_FILES_STORAGE_KEY = 'tdx-editor-recent-files'
+const ACTIVE_WINDOW_STORAGE_KEY = 'tdx-editor-active-window-label'
 
 type ToolbarButtonProps = {
   label: string
@@ -69,8 +73,25 @@ function systemTheme(): Theme {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
 }
 
+function persistRecentFile(filePath?: string) {
+  if (!filePath || typeof localStorage === 'undefined') return
+  const stored = localStorage.getItem(RECENT_FILES_STORAGE_KEY)
+  const recent = stored ? (JSON.parse(stored) as string[]) : []
+  const next = [filePath, ...recent.filter((path) => path !== filePath)].slice(0, 10)
+  localStorage.setItem(RECENT_FILES_STORAGE_KEY, JSON.stringify(next))
+}
+
 function App() {
-  const [content, setContent] = useState(() => readAutoSave(initialTdx))
+  const {
+    doc,
+    loaded,
+    statusMessage,
+    savedAt,
+    setContent,
+    setStatusMessage,
+    newFile,
+    markSaved,
+  } = useEditorDocument()
   const [themeOverride, setThemeOverride] = useState<Theme | null>(() => {
     if (typeof localStorage === 'undefined') return null
     const stored = localStorage.getItem(THEME_OVERRIDE_STORAGE_KEY)
@@ -78,20 +99,23 @@ function App() {
   })
   const [systemThemeValue, setSystemThemeValue] = useState<Theme>(() => systemTheme())
   const [problemsOpen, setProblemsOpen] = useState(true)
-  const [statusMessage, setStatusMessage] = useState('就绪')
   const editorRef = useRef<TdxCodeEditorHandle>(null)
+  const docRef = useRef(doc)
+  const allowCloseRef = useRef(false)
 
-  const savedAt = useAutoSave(content)
-  const file = useTdxFile(content, setContent)
-
-  const parsed = useMemo(() => parseTdx(content), [content])
-  const diagnostics = useMemo(() => lintTdx(content), [content])
+  const parsed = useMemo(() => parseTdx(doc.content), [doc.content])
+  const diagnostics = useMemo(() => lintTdx(doc.content), [doc.content])
   const summary = useMemo(() => diagnosticSummary(diagnostics), [diagnostics])
-  const lines = useMemo(() => content.split('\n').length, [content])
+  const lines = useMemo(() => doc.content.split('\n').length, [doc.content])
   const theme = themeOverride || systemThemeValue
 
   useEffect(() => {
+    docRef.current = doc
+  }, [doc])
+
+  useEffect(() => {
     document.documentElement.dataset.theme = theme
+    document.documentElement.dataset.platform = filePlatform.isDesktop ? 'desktop' : 'web'
   }, [theme])
 
   useEffect(() => {
@@ -110,46 +134,249 @@ function App() {
     return () => media.removeEventListener('change', updateSystemTheme)
   }, [])
 
-  const runAction = useCallback(async (action: () => Promise<void>, message: string) => {
+  const runAction = useCallback(async (action: () => Promise<boolean | void>, message: string) => {
     try {
-      await action()
+      const changed = await action()
+      if (changed === false) return
       setStatusMessage(message)
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') return
       setStatusMessage(error instanceof Error ? error.message : '操作失败')
     }
+  }, [setStatusMessage])
+
+  const save = useCallback(async () => {
+    const result = await filePlatform.save(docRef.current)
+    markSaved(result)
+    persistRecentFile(result.filePath)
+  }, [markSaved])
+
+  const saveAs = useCallback(async () => {
+    const result = await filePlatform.saveAs(docRef.current)
+    if (!result) return false
+    markSaved(result)
+    persistRecentFile(result.filePath)
+  }, [markSaved])
+
+  const openFiles = useCallback(async () => {
+    const files = await filePlatform.openFiles()
+    if (!files.length) return false
+
+    const [first, ...rest] = files
+    setContent(first.content)
+    markSaved({
+      fileName: first.fileName,
+      filePath: first.filePath,
+      savedAt: new Date(),
+    })
+    persistRecentFile(first.filePath)
+    await Promise.all(rest.map((file) => filePlatform.newWindow({ filePath: file.filePath, content: file.content })))
+  }, [markSaved, setContent])
+
+  const openPathInCurrentWindow = useCallback(
+    async (path: string) => {
+      const opened = await filePlatform.openPath(path)
+      setContent(opened.content)
+      markSaved({
+        fileName: opened.fileName,
+        filePath: opened.filePath,
+        savedAt: new Date(),
+      })
+      persistRecentFile(opened.filePath)
+    },
+    [markSaved, setContent],
+  )
+
+  const closeWindow = useCallback(async () => {
+    if (filePlatform.isDesktop) {
+      const [{ getCurrentWindow }, { confirm }] = await Promise.all([
+        import('@tauri-apps/api/window'),
+        import('@tauri-apps/plugin-dialog'),
+      ])
+      if (docRef.current.dirty) {
+        const shouldClose = await confirm(`关闭 ${docRef.current.fileName}？未保存的修改会丢失。`, {
+          title: '未保存的修改',
+          kind: 'warning',
+          okLabel: '关闭',
+          cancelLabel: '取消',
+        })
+        if (!shouldClose) return
+      }
+
+      allowCloseRef.current = true
+      await getCurrentWindow().destroy()
+      return
+    }
   }, [])
 
   useEffect(() => {
+    if (filePlatform.isDesktop) return
+
     const handler = (event: KeyboardEvent) => {
       const mod = event.metaKey || event.ctrlKey
       if (!mod) return
 
       if (event.key.toLowerCase() === 's' && event.shiftKey) {
         event.preventDefault()
-        void runAction(file.saveAs, '已另存文件')
+        void runAction(saveAs, '已另存文件')
       } else if (event.key.toLowerCase() === 's') {
         event.preventDefault()
-        void runAction(file.save, '已保存文件')
+        void runAction(save, '已保存文件')
       } else if (event.key.toLowerCase() === 'o') {
         event.preventDefault()
-        void runAction(file.openFile, '已打开文件')
+        void runAction(openFiles, '已打开文件')
       }
     }
 
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [file.openFile, file.save, file.saveAs, runAction])
+  }, [openFiles, runAction, save, saveAs])
 
   const loadSample = useCallback(() => {
     setContent(initialTdx)
     setStatusMessage('已载入示例公式')
-  }, [])
+  }, [setContent, setStatusMessage])
 
   const createNewFile = useCallback(() => {
-    file.newFile('')
+    if (filePlatform.isDesktop) {
+      void filePlatform.newWindow()
+      return
+    }
+
+    newFile('')
     setStatusMessage('已新建空白公式')
-  }, [file])
+  }, [newFile, setStatusMessage])
+
+  const runDesktopCommand = useCallback(
+    (command: DesktopCommand) => {
+      switch (command) {
+        case 'new':
+          void runAction(async () => filePlatform.newWindow(), '已新建窗口')
+          break
+        case 'open':
+          void runAction(openFiles, '已打开文件')
+          break
+        case 'save':
+          void runAction(save, '已保存文件')
+          break
+        case 'saveAs':
+          void runAction(saveAs, '已另存文件')
+          break
+        case 'close':
+          void closeWindow()
+          break
+        case 'toggleProblems':
+          setProblemsOpen((open) => !open)
+          break
+        case 'toggleTheme':
+          setThemeOverride((current) => {
+            const nextTheme = current || theme
+            return nextTheme === 'dark' ? 'light' : 'dark'
+          })
+          break
+        case 'loadSample':
+          loadSample()
+          break
+      }
+    },
+    [closeWindow, loadSample, openFiles, runAction, save, saveAs, theme],
+  )
+
+  useEffect(() => {
+    if (!filePlatform.isDesktop) return
+
+    let cleanup = () => {}
+
+    async function bindDesktopEvents() {
+      const [{ listen, TauriEvent }, { getCurrentWindow }, { confirm }] = await Promise.all([
+        import('@tauri-apps/api/event'),
+        import('@tauri-apps/api/window'),
+        import('@tauri-apps/plugin-dialog'),
+      ])
+      const currentWindow = getCurrentWindow()
+      const markActiveWindow = () => {
+        localStorage.setItem(ACTIVE_WINDOW_STORAGE_KEY, currentWindow.label)
+      }
+      markActiveWindow()
+      const unlistenCommand = await listen<DesktopCommand>('tdx://menu-command', (event) => {
+        const activeLabel = localStorage.getItem(ACTIVE_WINDOW_STORAGE_KEY)
+        if (activeLabel && activeLabel !== currentWindow.label) return
+
+        void currentWindow.isFocused().then((focused) => {
+          if (!activeLabel && !focused) return
+          runDesktopCommand(event.payload)
+        })
+      })
+      const unlistenOpenPath = await listen<DesktopOpenPathPayload>('tdx://open-path', (event) => {
+        void runAction(() => openPathInCurrentWindow(event.payload.path), '已打开文件')
+      })
+      const assigned = await getAssignedDesktopDocument()
+      if (assigned && assigned.filePath !== docRef.current.filePath) {
+        void runAction(() => openPathInCurrentWindow(assigned.filePath!), '已打开文件')
+      }
+      const unlistenClose = await currentWindow.onCloseRequested(async (event) => {
+        if (allowCloseRef.current || !docRef.current.dirty) return
+        event.preventDefault()
+        const shouldClose = await confirm(`关闭 ${docRef.current.fileName}？未保存的修改会丢失。`, {
+          title: '未保存的修改',
+          kind: 'warning',
+          okLabel: '关闭',
+          cancelLabel: '取消',
+        })
+        if (shouldClose) {
+          allowCloseRef.current = true
+          await currentWindow.close()
+        }
+      })
+      const unlistenDrop = await currentWindow.onDragDropEvent((event) => {
+        if (event.payload.type !== 'drop') return
+        event.payload.paths.forEach((filePath) => {
+          void filePlatform.newWindow({ filePath })
+        })
+      })
+      const unlistenFocus = await listen<string>(TauriEvent.WINDOW_FOCUS, () => {
+        docRef.current = doc
+      })
+      const unlistenFocusChanged = await currentWindow.onFocusChanged(({ payload: focused }) => {
+        if (focused) markActiveWindow()
+      })
+
+      cleanup = () => {
+        unlistenCommand()
+        unlistenOpenPath()
+        unlistenClose()
+        unlistenDrop()
+        unlistenFocus()
+        unlistenFocusChanged()
+      }
+    }
+
+    void bindDesktopEvents()
+
+    return () => cleanup()
+  }, [doc, openPathInCurrentWindow, runAction, runDesktopCommand])
+
+  useEffect(() => {
+    if (!filePlatform.isDesktop || !loaded) return
+
+    void setDesktopWindowDirty(doc.dirty)
+  }, [doc.dirty, loaded])
+
+  useEffect(() => {
+    if (!filePlatform.isDesktop || !loaded) return
+
+    async function updateWindowTitle() {
+      const { getCurrentWindow } = await import('@tauri-apps/api/window')
+      const title = `${doc.dirty ? '● ' : ''}${doc.fileName} - TDX Editor`
+      await getCurrentWindow().setTitle(title)
+    }
+
+    void updateWindowTitle()
+  }, [doc.dirty, doc.fileName, loaded])
+
+  if (!loaded) {
+    return <div className="loading-shell">正在载入 TDX Editor...</div>
+  }
 
   return (
     <div className="app-shell">
@@ -158,27 +385,32 @@ function App() {
           <span className="brand-mark">TDX</span>
           <div>
             <strong>TDX Editor</strong>
-            <span>{file.fileName}</span>
+            <span title={doc.filePath || doc.fileName}>
+              {doc.dirty ? '● ' : ''}
+              {doc.fileName}
+            </span>
           </div>
         </div>
 
-        <nav className="toolbar" aria-label="文件操作">
-          <ToolbarButton label="新建" title="新建 TDX 文件" onClick={createNewFile}>
-            <FilePlus2 size={15} />
-          </ToolbarButton>
-          <ToolbarButton label="打开" title="打开 .tdx 文件" onClick={() => void runAction(file.openFile, '已打开文件')}>
-            <FolderOpen size={15} />
-          </ToolbarButton>
-          <ToolbarButton label="保存" title="保存 Cmd/Ctrl+S" onClick={() => void runAction(file.save, '已保存文件')}>
-            <Save size={15} />
-          </ToolbarButton>
-          <ToolbarButton label="另存" title="另存为 Cmd/Ctrl+Shift+S" onClick={() => void runAction(file.saveAs, '已另存文件')}>
-            <Download size={15} />
-          </ToolbarButton>
-          <ToolbarButton label="示例" title="载入示例公式" onClick={loadSample}>
-            <Play size={15} />
-          </ToolbarButton>
-        </nav>
+        {!filePlatform.isDesktop && (
+          <nav className="toolbar" aria-label="文件操作">
+            <ToolbarButton label="新建" title="新建 TDX 文件" onClick={createNewFile}>
+              <FilePlus2 size={15} />
+            </ToolbarButton>
+            <ToolbarButton label="打开" title="打开 .tdx 文件" onClick={() => void runAction(openFiles, '已打开文件')}>
+              <FolderOpen size={15} />
+            </ToolbarButton>
+            <ToolbarButton label="保存" title="保存 Cmd/Ctrl+S" onClick={() => void runAction(save, '已保存文件')}>
+              <Save size={15} />
+            </ToolbarButton>
+            <ToolbarButton label="另存" title="另存为 Cmd/Ctrl+Shift+S" onClick={() => void runAction(saveAs, '已另存文件')}>
+              <Download size={15} />
+            </ToolbarButton>
+            <ToolbarButton label="示例" title="载入示例公式" onClick={loadSample}>
+              <Play size={15} />
+            </ToolbarButton>
+          </nav>
+        )}
 
         <div className="topbar-actions">
           <button
@@ -203,7 +435,7 @@ function App() {
       </header>
 
       <main className="workspace">
-        <TdxCodeEditor ref={editorRef} value={content} onChange={setContent} />
+        <TdxCodeEditor ref={editorRef} value={doc.content} onChange={setContent} />
       </main>
 
       {problemsOpen && (
@@ -222,7 +454,7 @@ function App() {
           {diagnostics.length ? (
             <ul className="problem-list">
               {diagnostics.map((item, index) => {
-                const position = lineColumn(content, item.range.start.offset)
+                const position = lineColumn(doc.content, item.range.start.offset)
                 return (
                   <li key={`${item.code}-${item.range.start.offset}-${index}`} className={`problem problem-${item.severity}`}>
                     <AlertCircle size={15} />
@@ -257,11 +489,12 @@ function App() {
           <span className={summary.errors ? 'status-dot status-error' : 'status-dot'} />
           <span>{statusMessage}</span>
           <span>{formatTime(savedAt)}</span>
+          {doc.dirty && <span>未保存</span>}
         </div>
         <div>
           <span>{parsed.symbols.length} 符号</span>
           <span>{lines} 行</span>
-          <span>{content.length.toLocaleString()} 字符</span>
+          <span>{doc.content.length.toLocaleString()} 字符</span>
           <span>UTF-8</span>
         </div>
       </footer>
