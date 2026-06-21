@@ -43,7 +43,6 @@ export type DesktopCommand =
   | 'save'
   | 'saveAs'
   | 'close'
-  | 'toggleProblems'
   | 'toggleTheme'
   | 'loadSample'
 

@@ -4,13 +4,11 @@ import {
   Download,
   FilePlus2,
   FolderOpen,
-  ListChecks,
   Menu,
   Moon,
   Play,
   Save,
   Sun,
-  X,
 } from 'lucide-react'
 import { lintTdx, parseTdx, type TdxDiagnostic } from '@tdx/language'
 import './App.css'
@@ -88,7 +86,6 @@ function App() {
     return stored === 'dark' || stored === 'light' ? stored : null
   })
   const [systemThemeValue, setSystemThemeValue] = useState<Theme>(() => systemTheme())
-  const [problemsOpen, setProblemsOpen] = useState(false)
   const [fileMenuOpen, setFileMenuOpen] = useState(false)
   const editorRef = useRef<TdxCodeEditorHandle>(null)
   const docRef = useRef(doc)
@@ -264,9 +261,6 @@ function App() {
           break
         case 'close':
           void closeWindow()
-          break
-        case 'toggleProblems':
-          setProblemsOpen((open) => !open)
           break
         case 'toggleTheme':
           setThemeOverride((current) => {
@@ -493,16 +487,6 @@ function App() {
           <button
             type="button"
             className="icon-button"
-            aria-pressed={problemsOpen}
-            title="问题面板"
-            onClick={() => setProblemsOpen((open) => !open)}
-          >
-            <ListChecks size={16} />
-            <span>{diagnostics.length}</span>
-          </button>
-          <button
-            type="button"
-            className="icon-button"
             title="切换主题"
             onClick={() => setThemeOverride(theme === 'dark' ? 'light' : 'dark')}
           >
@@ -515,49 +499,38 @@ function App() {
         <TdxCodeEditor ref={editorRef} value={doc.content} onChange={setContent} />
       </main>
 
-      {problemsOpen && (
-        <aside className="problems-panel" aria-label="问题列表">
-          <div className="panel-header">
-            <span>
-              {summary.errors} 错误 · {summary.warnings} 警告 · {summary.infos} 提示
-            </span>
-            <button
-              type="button"
-              className="panel-close"
-              aria-label="关闭问题面板"
-              title="关闭问题面板"
-              onClick={() => setProblemsOpen(false)}
-            >
-              <X size={15} />
-            </button>
-          </div>
-          {diagnostics.length > 0 && (
-            <ul className="problem-list">
-              {diagnostics.map((item, index) => {
-                const position = lineColumn(doc.content, item.range.start.offset)
-                return (
-                  <li key={`${item.code}-${item.range.start.offset}-${index}`} className={`problem problem-${item.severity}`}>
-                    <AlertCircle size={15} />
-                    <button
-                      type="button"
-                      className="problem-link"
-                      onClick={() => editorRef.current?.focusOffset(item.range.start.offset)}
-                    >
-                      <strong>
-                        {severityLabel(item.severity)} · {item.message}
-                      </strong>
-                      {item.hint && <span>{item.hint}</span>}
-                    </button>
-                    <code>
-                      {position.line}:{position.column}
-                    </code>
-                  </li>
-                )
-              })}
-            </ul>
-          )}
-        </aside>
-      )}
+      <aside className="problems-panel" aria-label="问题列表">
+        <div className="panel-header">
+          <span>
+            {summary.errors} 错误 · {summary.warnings} 警告 · {summary.infos} 提示
+          </span>
+        </div>
+        {diagnostics.length > 0 && (
+          <ul className="problem-list">
+            {diagnostics.map((item, index) => {
+              const position = lineColumn(doc.content, item.range.start.offset)
+              return (
+                <li key={`${item.code}-${item.range.start.offset}-${index}`} className={`problem problem-${item.severity}`}>
+                  <AlertCircle size={15} />
+                  <button
+                    type="button"
+                    className="problem-link"
+                    onClick={() => editorRef.current?.focusOffset(item.range.start.offset)}
+                  >
+                    <strong>
+                      {severityLabel(item.severity)} · {item.message}
+                    </strong>
+                    {item.hint && <span>{item.hint}</span>}
+                  </button>
+                  <code>
+                    {position.line}:{position.column}
+                  </code>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </aside>
 
       <footer className="statusbar">
         <div>
