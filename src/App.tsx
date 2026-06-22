@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertCircle,
+  ChevronDown,
+  ChevronUp,
   Download,
   FilePlus2,
   FolderOpen,
@@ -91,6 +93,7 @@ function App() {
     if (typeof localStorage === 'undefined') return true
     return localStorage.getItem(LINE_WRAP_STORAGE_KEY) !== 'off'
   })
+  const [problemsExpanded, setProblemsExpanded] = useState(true)
   const [systemThemeValue, setSystemThemeValue] = useState<Theme>(() => systemTheme())
   const [fileMenuOpen, setFileMenuOpen] = useState(false)
   const editorRef = useRef<TdxCodeEditorHandle>(null)
@@ -527,9 +530,20 @@ function App() {
           <span>
             {summary.errors} 错误 · {summary.warnings} 警告 · {summary.infos} 提示
           </span>
+          <button
+            type="button"
+            className="panel-toggle-button"
+            aria-controls="problem-list"
+            aria-expanded={problemsExpanded}
+            aria-label={problemsExpanded ? '收起问题详情' : '展开问题详情'}
+            title={problemsExpanded ? '收起问题详情' : '展开问题详情'}
+            onClick={() => setProblemsExpanded((expanded) => !expanded)}
+          >
+            {problemsExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          </button>
         </div>
-        {diagnostics.length > 0 && (
-          <ul className="problem-list">
+        {problemsExpanded && diagnostics.length > 0 && (
+          <ul id="problem-list" className="problem-list">
             {diagnostics.map((item, index) => {
               const position = lineColumn(doc.content, item.range.start.offset)
               return (
